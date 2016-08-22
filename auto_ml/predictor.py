@@ -72,12 +72,13 @@ class Predictor(object):
         feature_union_list = []
         # Construct a pipeline tuple from our main_dv_pipeline
         main_dv_pipeline = ('main_dv_pipeline', Pipeline(maindv_pipeline_list))
-        feature_union_list.append(main_dv_pipeline)
 
         if len(self.date_cols) > 0:
             feature_union_list.append(('date_feature_engineering', date_feature_engineering.FeatureEngineer(date_cols=self.date_cols, return_sparse=True)))
 
-        feature_engineering_feature_union = FeatureUnion(feature_union_list)
+        feature_union_list.append(main_dv_pipeline)
+
+        feature_engineering_feature_union = FeatureUnion(feature_union_list, n_jobs=-1)
 
         pipeline_list.append(('feature_engineering_feature_union', feature_engineering_feature_union))
 
@@ -97,6 +98,13 @@ class Predictor(object):
         pipeline_list.append(('final_model', utils.FinalModelATC(model_name=model_name, perform_grid_search_on_model=optimize_final_model, type_of_estimator=self.type_of_estimator, ml_for_analytics=ml_for_analytics)))
 
         constructed_pipeline = Pipeline(pipeline_list)
+        # for step in constructed_pipeline.steps:
+        #     if step[0] == 'feature_engineering_feature_union':
+        #         for substep in step[1].named_steps:
+        #             print(substep)
+        #     print(step)
+        # print(constructed_pipeline)
+
         return constructed_pipeline
 
 
