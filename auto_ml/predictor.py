@@ -6,7 +6,7 @@ from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.grid_search import GridSearchCV
 from sklearn.metrics import mean_squared_error, brier_score_loss, make_scorer
-from sklearn.pipeline import Pipeline
+from sklearn.pipeline import Pipeline, FeatureUnion
 from sklearn.preprocessing import FunctionTransformer
 
 import utils
@@ -50,38 +50,48 @@ class Predictor(object):
 
         pipeline_list = []
 
+        maindv_pipeline_list = []
+
         # TODO: add in FeatureUnion compatibility to FunctionTransformer
         if user_input_func is not None:
-            pipeline_list.append(('user_func', FunctionTransformer(func=user_input_func, pass_y=False, validate=False) ))
+            maindv_pipeline_list.append(('user_func', FunctionTransformer(func=user_input_func, pass_y=False, validate=False) ))
 
         # TODO: add in FeatureUnion coompatibility
         # These parts will be included no matter what.
-        pipeline_list.append(('basic_transform', utils.BasicDataCleaning(column_descriptions=self.column_descriptions)))
+        maindv_pipeline_list.append(('basic_transform', utils.BasicDataCleaning(column_descriptions=self.column_descriptions)))
 
         if perform_feature_scaling:
-            pipeline_list.append(('scaler', utils.CustomSparseScaler(self.column_descriptions)))
+            maindv_pipeline_list.append(('scaler', utils.CustomSparseScaler(self.column_descriptions)))
 
         # For a nice visual diagram of something similar to what we're constructing here, check out: http://zacstewart.com/2014/08/05/pipelines-of-featureunions-of-pipelines.html
-        feature_union_list = []
 
         # This flow is the base of our FeatureUnion: take our main X values, DictVectorize them into a sparse matrix.
         # This is important because we will be sparse hstacking onto what DictVectorizer returns
-        feature_union_list.append(('dv', DictVectorizer(sparse=True)))
+        maindv_pipeline_list.append(('dv', DictVectorizer(sparse=True)))
+
+        feature_union_list = []
+        # Construct a pipeline tuple from our main_dv_pipeline
+        main_dv_pipeline = ('main_dv_pipeline', Pipeline(maindv_pipeline_list))
+        feature_union_list.append(main_dv_pipeline)
 
         if len(self.date_cols) > 0:
             feature_union_list.append(('date_feature_engineering', date_feature_engineering.FeatureEngineer(date_cols=self.date_cols, return_sparse=True)))
+
+        feature_engineering_feature_union = FeatureUnion(feature_union_list)
+
+        pipeline_list.append(('feature_engineering_feature_union', feature_engineering_feature_union))
 
 
         if perform_feature_selection:
             # pipeline_list.append(('pca', TruncatedSVD()))
             pipeline_list.append(('feature_selection', utils.FeatureSelectionTransformer(type_of_estimator=self.type_of_estimator, feature_selection_model='SelectFromModel') ))
 
-        # if self.add_cluster_prediction or self.compute_power >=7:
-        #     pipeline_list.append(('add_cluster_prediction', utils.AddPredictedFeature(model_name='MiniBatchKMeans', type_of_estimator=self.type_of_estimator, include_original_X=True)))
+        if self.add_cluster_prediction or self.compute_power >=7:
+            pipeline_list.append(('add_cluster_prediction', utils.AddPredictedFeature(model_name='MiniBatchKMeans', type_of_estimator=self.type_of_estimator, include_original_X=True)))
 
-        if self.subpredictors_to_train is not None:
-            pipeline_list.append(('subpredictor_feature_union', ))
-            for subpredictor_name, subpredictor_y_vals in self.subpredictors_to_train.iteritems():
+        # if self.subpredictors_to_train is not None:
+        #     pipeline_list.append(('subpredictor_feature_union', ))
+        #     for subpredictor_name, subpredictor_y_vals in self.subpredictors_to_train.iteritems():
 
 
         pipeline_list.append(('final_model', utils.FinalModelATC(model_name=model_name, perform_grid_search_on_model=optimize_final_model, type_of_estimator=self.type_of_estimator, ml_for_analytics=ml_for_analytics)))
