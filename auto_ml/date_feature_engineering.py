@@ -7,7 +7,7 @@ from sklearn.feature_extraction import DictVectorizer
 class FeatureEngineer(BaseEstimator, TransformerMixin):
 
     # Future: consider a dates_since_min_date feature. This has a high risk of over-fitting though, so I'd prefer not to include it easily.
-    def __init__(self, date_cols, return_sparse=False):
+    def __init__(self, date_cols, return_sparse=True):
         self.return_sparse = return_sparse
         self.date_cols = date_cols
 
@@ -51,7 +51,9 @@ class FeatureEngineer(BaseEstimator, TransformerMixin):
                         # we will later feed this through a DictVectorizer to turn the dicts into sparse matrices
                         features_in_dict = self.extract_features(date_val, date_col, feature_dict={})
                         list_of_feature_dicts.append(features_in_dict)
-
+                else:
+                    # For every row, we must return something, otherwise our hstacking later on will be off
+                    list_of_feature_dicts.append({})
 
         if self.return_sparse is False:
             return X

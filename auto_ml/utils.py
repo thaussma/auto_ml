@@ -474,6 +474,7 @@ class CustomSparseScaler(BaseEstimator, TransformerMixin):
 
     # Perform basic min/max scaling, with the minor caveat that our min and max values are the 10th and 90th percentile values, to avoid outliers.
     def transform(self, X, y=None):
+
         for row in X:
             for k, v in row.items():
                 if k not in self.cols_to_avoid:
