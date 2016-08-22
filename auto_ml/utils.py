@@ -47,7 +47,7 @@ class BasicDataCleaning(BaseEstimator, TransformerMixin):
         return self
 
 
-    def turn_strings_to_floats(self, X, y=None):
+    def transform(self, X, y=None):
 
         vals_to_del = set([None, float('nan'), float('Inf')])
 
@@ -58,18 +58,16 @@ class BasicDataCleaning(BaseEstimator, TransformerMixin):
                     row[key] = str(val)
                 elif col_desc in (None, 'continuous', 'numerical', 'float', 'int'):
                     if val in vals_to_del:
+                        # TODO: eventually here we will put in a special value to indicate we should try to impute this value later on in the pipeline
                         del row[key]
                     else:
                         row[key] = float(val)
+                elif col_desc == 'date':
+                    # We have a separate pipeline handling our date feature engineering. This pipeline feeds directly to the main DictVectorizer, and thus, must not have date values in it.
+                    del row[key]
                 else:
                     # covers cases for dates, target, etc.
                     pass
-
-        return X
-
-
-    def transform(self, X, y=None):
-        X = self.turn_strings_to_floats(X, y)
 
         return X
 
