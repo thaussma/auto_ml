@@ -1,0 +1,4 @@
+Ok, this is going to be much more of a pain than I expected. I forgot about the random splits from CV.
+
+My approach had been to just send in a static list of y_train vals for each subpredictor at initilization, that the user had passed in to us.
+

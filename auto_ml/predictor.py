@@ -46,7 +46,7 @@ class Predictor(object):
 
         self.grid_search_pipelines = []
 
-    def _construct_pipeline(self, user_input_func=None, model_name='LogisticRegression', optimize_final_model=False, perform_feature_selection=True, impute_missing_values=True, ml_for_analytics=True, perform_feature_scaling=True):
+    def _construct_pipeline(self, y=None, user_input_func=None, model_name='LogisticRegression', optimize_final_model=False, perform_feature_selection=True, impute_missing_values=True, ml_for_analytics=True, perform_feature_scaling=True):
 
         pipeline_list = []
         if user_input_func is not None:
@@ -62,6 +62,14 @@ class Predictor(object):
             pipeline_list.append(('scaler', utils.CustomSparseScaler(self.column_descriptions)))
 
         pipeline_list.append(('dv', DictVectorizer(sparse=True)))
+
+        if self.subpredictors is not None:
+            pipeline_list.append(('add_subpredictor', utils.AddSubpredictorPrediction(y_train=y, type_of_estimator='regressor')))
+
+        # # For each set of y-vals in the user's input, create a separate subpredictor.
+        # # We will then feature union these subpredictors together.
+        # if self.subpredictors is not None:
+        #     subpredictor_feature_union_list = []
 
         if perform_feature_selection:
             # pipeline_list.append(('pca', TruncatedSVD()))
@@ -171,7 +179,7 @@ class Predictor(object):
 
         return X, y
 
-    def train(self, raw_training_data, user_input_func=None, optimize_entire_pipeline=False, optimize_final_model=False, write_gs_param_results_to_file=True, perform_feature_selection=True, verbose=True, X_test=None, y_test=None, print_training_summary_to_viewer=True, ml_for_analytics=True, only_analytics=False, compute_power=3, take_log_of_y=True, model_names=None, add_cluster_prediction=False):
+    def train(self, raw_training_data, user_input_func=None, optimize_entire_pipeline=False, optimize_final_model=False, write_gs_param_results_to_file=True, perform_feature_selection=True, verbose=True, X_test=None, y_test=None, print_training_summary_to_viewer=True, ml_for_analytics=True, only_analytics=False, compute_power=3, take_log_of_y=True, model_names=None, add_cluster_prediction=False, subpredictors=None):
 
         self.write_gs_param_results_to_file = write_gs_param_results_to_file
         self.compute_power = compute_power
@@ -183,6 +191,7 @@ class Predictor(object):
         if self.type_of_estimator == 'regressor':
             self.take_log_of_y = take_log_of_y
         self.add_cluster_prediction = add_cluster_prediction
+        self.subpredictors = subpredictors
 
         if verbose:
             print('Welcome to auto_ml! We\'re about to go through and make sense of your data using machine learning')
@@ -196,7 +205,7 @@ class Predictor(object):
         if verbose:
             print('Successfully performed basic preparations and y-value cleaning')
 
-        ppl = self._construct_pipeline(user_input_func, optimize_final_model=optimize_final_model, perform_feature_selection=perform_feature_selection, ml_for_analytics=self.ml_for_analytics)
+        ppl = self._construct_pipeline( y=y, user_input_func=user_input_func, optimize_final_model=optimize_final_model, perform_feature_selection=perform_feature_selection, ml_for_analytics=self.ml_for_analytics)
 
         if verbose:
             print('Successfully constructed the pipeline')

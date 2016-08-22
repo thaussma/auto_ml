@@ -534,7 +534,7 @@ class AddPredictedFeature(BaseEstimator, TransformerMixin):
         self.model = self.model_map[self.model_name]
 
         if self.y_train is not None:
-            y = y_train
+            y = self.y_train
 
         if self.model_name == 'MiniBatchKMeans':
             self.model.fit(X)
@@ -569,7 +569,38 @@ class AddPredictedFeature(BaseEstimator, TransformerMixin):
             return predictions
 
 
+# TODO: Much of this can likely be combined with AddPredictedFeature above
+class AddSubpredictorPrediction(BaseEstimator, TransformerMixin):
 
 
+    def __init__(self, y_train, type_of_estimator, subpredictor_name=None):
+        print('Created AddSubpredictorPrediction')
+        self.y_train = y_train
+        self.subpredictor_name = subpredictor_name
+        self.type_of_estimator = type_of_estimator
+        if self.type_of_estimator == 'regressor':
+            self.model = LinearRegression()
+        else:
+            self.model = LogisticRegression()
+
+        # TODO: eventually make this dynamic based on the name of the subpredictor whic the user gave us
+        self.added_feature_names_ = ['subpredictor']
+
+
+    def fit(self, X, y=None):
+        print('fitting AddSubpredictorPrediction')
+        self.model.fit(X, self.y_train)
+        return self
+
+
+    def transform(self, X, y=None):
+        predictions = self.model.predict(X)
+
+        predictions = scipy.sparse.csr_matrix(predictions)
+
+        # Eventually, we'll just return the predictions, but for testing for now, append it to X ourselves here.
+        X = scipy.sparse.hstack((X, predictions))
+
+        return predictions
 
 
