@@ -569,7 +569,3 @@ class AddPredictedFeature(BaseEstimator, TransformerMixin):
             return predictions
 
 
-
-
-
-

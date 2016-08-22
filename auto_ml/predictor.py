@@ -49,26 +49,40 @@ class Predictor(object):
     def _construct_pipeline(self, user_input_func=None, model_name='LogisticRegression', optimize_final_model=False, perform_feature_selection=True, impute_missing_values=True, ml_for_analytics=True, perform_feature_scaling=True):
 
         pipeline_list = []
+
+        # TODO: add in FeatureUnion compatibility to FunctionTransformer
         if user_input_func is not None:
             pipeline_list.append(('user_func', FunctionTransformer(func=user_input_func, pass_y=False, validate=False) ))
 
-        if len(self.date_cols) > 0:
-            pipeline_list.append(('date_feature_engineering', date_feature_engineering.FeatureEngineer(date_cols=self.date_cols)))
-
+        # TODO: add in FeatureUnion coompatibility
         # These parts will be included no matter what.
         pipeline_list.append(('basic_transform', utils.BasicDataCleaning(column_descriptions=self.column_descriptions)))
 
         if perform_feature_scaling:
             pipeline_list.append(('scaler', utils.CustomSparseScaler(self.column_descriptions)))
 
-        pipeline_list.append(('dv', DictVectorizer(sparse=True)))
+        # For a nice visual diagram of something similar to what we're constructing here, check out: http://zacstewart.com/2014/08/05/pipelines-of-featureunions-of-pipelines.html
+        feature_union_list = []
+
+        # This flow is the base of our FeatureUnion: take our main X values, DictVectorize them into a sparse matrix.
+        # This is important because we will be sparse hstacking onto what DictVectorizer returns
+        feature_union_list.append(('dv', DictVectorizer(sparse=True)))
+
+        if len(self.date_cols) > 0:
+            feature_union_list.append(('date_feature_engineering', date_feature_engineering.FeatureEngineer(date_cols=self.date_cols, return_sparse=True)))
+
 
         if perform_feature_selection:
             # pipeline_list.append(('pca', TruncatedSVD()))
             pipeline_list.append(('feature_selection', utils.FeatureSelectionTransformer(type_of_estimator=self.type_of_estimator, feature_selection_model='SelectFromModel') ))
 
-        if self.add_cluster_prediction or self.compute_power >=7:
-            pipeline_list.append(('add_cluster_prediction', utils.AddPredictedFeature(model_name='MiniBatchKMeans', type_of_estimator=self.type_of_estimator, include_original_X=True)))
+        # if self.add_cluster_prediction or self.compute_power >=7:
+        #     pipeline_list.append(('add_cluster_prediction', utils.AddPredictedFeature(model_name='MiniBatchKMeans', type_of_estimator=self.type_of_estimator, include_original_X=True)))
+
+        if self.subpredictors_to_train is not None:
+            pipeline_list.append(('subpredictor_feature_union', ))
+            for subpredictor_name, subpredictor_y_vals in self.subpredictors_to_train.iteritems():
+
 
         pipeline_list.append(('final_model', utils.FinalModelATC(model_name=model_name, perform_grid_search_on_model=optimize_final_model, type_of_estimator=self.type_of_estimator, ml_for_analytics=ml_for_analytics)))
 
@@ -171,7 +185,7 @@ class Predictor(object):
 
         return X, y
 
-    def train(self, raw_training_data, user_input_func=None, optimize_entire_pipeline=False, optimize_final_model=False, write_gs_param_results_to_file=True, perform_feature_selection=True, verbose=True, X_test=None, y_test=None, print_training_summary_to_viewer=True, ml_for_analytics=True, only_analytics=False, compute_power=3, take_log_of_y=True, model_names=None, add_cluster_prediction=False):
+    def train(self, raw_training_data, user_input_func=None, optimize_entire_pipeline=False, optimize_final_model=False, write_gs_param_results_to_file=True, perform_feature_selection=True, verbose=True, X_test=None, y_test=None, print_training_summary_to_viewer=True, ml_for_analytics=True, only_analytics=False, compute_power=3, take_log_of_y=True, model_names=None, add_cluster_prediction=False, subpredictors_to_train=None):
 
         self.write_gs_param_results_to_file = write_gs_param_results_to_file
         self.compute_power = compute_power
@@ -183,6 +197,7 @@ class Predictor(object):
         if self.type_of_estimator == 'regressor':
             self.take_log_of_y = take_log_of_y
         self.add_cluster_prediction = add_cluster_prediction
+        self.subpredictors_to_train = subpredictors_to_train
 
         if verbose:
             print('Welcome to auto_ml! We\'re about to go through and make sense of your data using machine learning')
