@@ -1,6 +1,7 @@
 import datetime
 
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.feature_extraction import DictVectorizer
 
 
 class FeatureEngineer(BaseEstimator, TransformerMixin):
@@ -16,7 +17,7 @@ class FeatureEngineer(BaseEstimator, TransformerMixin):
         # if we're returning sparse data, we will need to fit a DictVectorizer
 
         if self.return_sparse:
-            predicted_vals = _iterate_X_and_get_date_features(X)
+            predicted_vals = self._iterate_X_and_get_date_features(X)
             self.dv = DictVectorizer(sparse=True)
             self.dv.fit(predicted_vals)
 
@@ -59,7 +60,6 @@ class FeatureEngineer(BaseEstimator, TransformerMixin):
 
 
     def extract_features(self, date_val, date_col, feature_dict):
-        if self.return_sparse:
 
         feature_dict[date_col + '_day_of_week'] = str(date_val.weekday())
         feature_dict[date_col + '_hour'] = date_val.hour
