@@ -8,6 +8,7 @@ import random
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, ExtraTreesRegressor, AdaBoostRegressor
+from sklearn.feature_extraction import DictVectorizer
 from sklearn.feature_selection import GenericUnivariateSelect, RFECV, SelectFromModel
 from sklearn.grid_search import GridSearchCV, RandomizedSearchCV
 from sklearn.linear_model import LogisticRegression, LinearRegression, RandomizedLasso, RandomizedLogisticRegression, RidgeClassifier, Ridge, Perceptron, RANSACRegressor
@@ -50,6 +51,8 @@ class BasicDataCleaning(BaseEstimator, TransformerMixin):
     def transform(self, X, y=None):
 
         vals_to_del = set([None, float('nan'), float('Inf')])
+        vals_to_float = set([None, 'continuous', 'numerical', 'float', 'int'])
+
         deleted_values_sample = []
         deleted_info = {}
         for row in X:
@@ -57,7 +60,7 @@ class BasicDataCleaning(BaseEstimator, TransformerMixin):
                 col_desc = self.column_descriptions.get(key)
                 if col_desc == 'categorical':
                     row[key] = str(val)
-                elif col_desc in (None, 'continuous', 'numerical', 'float', 'int'):
+                elif col_desc in vals_to_float:
                     if val in vals_to_del:
                         # TODO: eventually here we will put in a special value to indicate we should try to impute this value later on in the pipeline
                         del row[key]
@@ -75,7 +78,6 @@ class BasicDataCleaning(BaseEstimator, TransformerMixin):
                     deleted_info[key] = col_desc
                     del row[key]
                     # covers cases for dates, target, etc.
-                    pass
         if len(deleted_values_sample) > 0:
             print('We have encountered some values in column_descriptions that are not currently supported. The values stored at these keys have been deleted to allow the rest of the pipeline to run. Here\'s some info about these columns:' )
             print(deleted_info)
@@ -610,14 +612,15 @@ class AddSubpredictorPrediction(BaseEstimator, TransformerMixin):
             'RANSACRegressor': RANSACRegressor(),
 
             # Clustering
-            'MiniBatchKMeans': MiniBatchKMeans(self.n_clusters)
+            'MiniBatchKMeans': MiniBatchKMeans()
         }
 
-    def __init__(self, type_of_estimator, col_name, model_name=None):
+    def __init__(self, type_of_estimator, col_name, column_descriptions=None, model_name=None):
         self.type_of_estimator = type_of_estimator
         self.col_name = col_name
         self.col_attribute_name = 'subpredictor_' + self.col_name
         self.set_model_map
+        self.column_descriptions = column_descriptions
 
         if model_name is not None:
             self.model_name = model_name
@@ -625,6 +628,8 @@ class AddSubpredictorPrediction(BaseEstimator, TransformerMixin):
             self.model_name = 'LinearRegression'
         elif type_of_estimator == 'classifier':
             self.model_name = 'LogisticRegression'
+
+        self.set_model_map()
         self.model = self.model_map[self.model_name]
 
         # Each row holds the observed value for this subpredictor that we are trying to predict.
@@ -632,26 +637,104 @@ class AddSubpredictorPrediction(BaseEstimator, TransformerMixin):
         self.y_train = []
 
 
+    # This is a ton of duplicate code. We can definitely refactor it at some point.
+    def clean_data(self, X):
+        duplicate_X = []
+        vals_to_del = set([None, float('nan'), float('Inf')])
+        deleted_values_sample = []
+        deleted_info = {}
+        for row in X:
+            for key, val in row.items():
+                col_desc = self.column_descriptions.get(key)
+                if col_desc == 'categorical':
+                    row[key] = str(val)
+                elif col_desc in (None, 'continuous', 'numerical', 'float', 'int'):
+                    if val in vals_to_del:
+                        # TODO: eventually here we will put in a special value to indicate we should try to impute this value later on in the pipeline
+                        del row[key]
+                    else:
+                        row[key] = float(val)
+                elif col_desc == 'date':
+                    # We have a separate pipeline handling our date feature engineering. This pipeline feeds directly to the main DictVectorizer, and thus, must not have date values in it.
+                    del row[key]
+                else:
+                    # If we have gotten here, the value is not any that we recognize
+                    # This is most likely a typo that the user would want to be informed of, or a case while we're developing on auto_ml itself.
+                    # Regardless, log it.
+                    if len(deleted_values_sample) < 10:
+                        deleted_values_sample.append(row[key])
+                    deleted_info[key] = col_desc
+                    del row[key]
+                    # covers cases for dates, target, etc.
+                    pass
+        if len(deleted_values_sample) > 0:
+            print('We have encountered some values in column_descriptions that are not currently supported. The values stored at these keys have been deleted to allow the rest of the pipeline to run. Here\'s some info about these columns:' )
+            print(deleted_info)
+            print('And some example values from these columns:')
+            print(deleted_values_sample)
+
+
+
     def fit(self, X, y=None):
         print('AddSubpredictorPrediction is being fit')
-        print('X.shape')
-        print(X.shape)
+        # print('X.shape')
+        # print(X.shape)
         # Remove these values (they're what we're trying to predict, we will not know them beforehand when we're actually making the predictions).
+        vals_to_del = set([None, float('nan'), float('Inf')])
+        y_train_dup_direct = []
+
         for row in X:
             val = row.pop(self.col_attribute_name, None)
             self.y_train.append(val)
+            y_train_dup_direct.append(val)
 
-        self.dv = DictVectorizer(sparse=True, copy=True)
+            for key, val in row.items():
+                col_desc = self.column_descriptions.get(key)
+                if col_desc == 'categorical':
+                    row[key] = str(val)
+                elif col_desc in (None, 'continuous', 'numerical', 'float', 'int'):
+                    if val in vals_to_del:
+                        # TODO: eventually here we will put in a special value to indicate we should try to impute this value later on in the pipeline
+                        del row[key]
+                    else:
+                        row[key] = float(val)
+                elif col_desc == 'date':
+                    # We have a separate pipeline handling our date feature engineering. This pipeline feeds directly to the main DictVectorizer, and thus, must not have date values in it.
+                    del row[key]
+                else:
+                    del row[key]
+                    # covers cases for dates, target, etc.
+                    pass
+
+
+        self.dv = DictVectorizer(sparse=True)
+
+        print('\n\nafter taking out the vals we want')
+        # print(X[:5])
+        # bdc = BasicDataCleaning(column_descriptions=self.column_descriptions)
+        # X = bdc.transform(X)
+        print('\n\nafter BDC')
+        # print(X[:5])
+
         X = self.dv.fit_transform(X)
-
-        self.model.fit(X, self.y_train)
-
+        print('\n\nafter dv.fit_transform')
+        # print(X[:5])
+        print('self.y_train[:5]')
+        print(self.y_train[:5])
+        # print()
+        # TODO(PRESTON): This is where the issue is!
+        # *************************************************************************************
+        # When we pass in values to fit, the y values passed in are all nan
+        y_train_dup_direct = [float(val) for val in y_train_dup_direct]
+        self.model.fit(X=X, y=y_train_dup_direct)
+        print('WE MADE IT PAST self.model.fit()')
+        print('**********************************************************')
 
     def transform(self, X, y=None):
-
-        print('self.predict(X)')
-        print(self.predict(X))
-        return self.predict(X)
+        X = self.dv.transform(X)
+        print('self.model.predict(X)')
+        print(self.model.predict(X))
+        return self.model.predict(X)
 
 
 
