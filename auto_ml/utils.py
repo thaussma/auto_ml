@@ -568,3 +568,14 @@ class AddPredictedFeature(BaseEstimator, TransformerMixin):
             return predictions
 
 
+def regressor_or_classifier(type_of_estimator):
+    if type_of_estimator.lower() in ['regressor','regression', 'regressions', 'regressors', 'number', 'numeric', 'continuous']:
+        return 'regressor'
+    elif type_of_estimator.lower() in ['classifier', 'classification', 'categorizer', 'categorization', 'categories', 'labels', 'labeled', 'label']:
+        return 'classifier'
+    else:
+        print('Invalid value for "type_of_estimator". Please pass in either "regressor" or "classifier". You passed in: ' + type_of_estimator)
+        raise ValueError('Invalid value for "type_of_estimator". Please pass in either "regressor" or "classifier". You passed in: ' + type_of_estimator)
+
+
+
