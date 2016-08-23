@@ -45,12 +45,14 @@ class Predictor(object):
             # If the user wants us to train subpredictors, they must pass in the y_train values for that subpredictor as attributes on each row.
             # That attribute name must start with 'subpredictor'
             # The value for that attribute name in column_descriptions should be either 'classifier' or 'regressor'
-            elif value[:12] == 'subpredictor':
+            elif key[:12] == 'subpredictor':
+                print(key)
                 print(value)
-                self.subpredictors[value[13:]] = utils.regressor_or_classifier(value)
+                self.subpredictors[key[13:]] = utils.regressor_or_classifier(value)
 
+        print('self.subpredictors')
+        print(self.subpredictors)
 
-        print(self)
         self.grid_search_pipelines = []
 
     def _construct_pipeline(self, user_input_func=None, model_name='LogisticRegression', optimize_final_model=False, perform_feature_selection=True, impute_missing_values=True, ml_for_analytics=True, perform_feature_scaling=True):
@@ -81,17 +83,18 @@ class Predictor(object):
         if len(self.date_cols) > 0:
             feature_union_list.append(('date_feature_engineering', date_feature_engineering.FeatureEngineer(date_cols=self.date_cols, return_sparse=True)))
 
-        # for subpredictor_name in self.subpredictors:
-        #     feature_union.append((
-        #         'subpredictor_' + subpredictor_name,
-        #         utils.AddSubpredictorPrediction(
-        #             type_of_estimator=self.subpredictors[subpredictor_name],
-        #             col_name=subpredictor_name
-        #     )))
+        for subpredictor_name in self.subpredictors:
+            feature_union_list.append((
+                'subpredictor_' + subpredictor_name,
+                utils.AddSubpredictorPrediction(
+                    type_of_estimator=self.subpredictors[subpredictor_name],
+                    col_name=subpredictor_name,
+                    column_descriptions=self.column_descriptions
+            )))
 
         feature_union_list.append(main_dv_pipeline)
 
-        feature_union = FeatureUnion(feature_union_list, n_jobs=-1)
+        feature_union = FeatureUnion(feature_union_list, n_jobs=1)
 
         pipeline_list.append(('feature_union', feature_union))
 
@@ -170,6 +173,7 @@ class Predictor(object):
         else:
             raise('TypeError: type_of_estimator must be either "classifier" or "regressor".')
 
+
     def _prepare_for_training(self, raw_training_data):
         if self.write_gs_param_results_to_file:
             self.gs_param_file_name = 'most_recent_pipeline_grid_search_result.csv'
@@ -181,13 +185,11 @@ class Predictor(object):
         # split out out output column so we have a proper X, y dataset
         X, y = utils.split_output(raw_training_data, self.output_column)
 
+
         # TODO: modularize into clean_y_vals function
         if self.type_of_estimator == 'classifier':
             try:
-                y_ints = []
-                for val in y:
-                    y_ints.append(int(val))
-                y = y_ints
+                y = [int(val) for val in y]
             except:
                 pass
 
