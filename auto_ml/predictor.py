@@ -84,9 +84,9 @@ class Predictor(object):
 
         feature_union_list.append(main_dv_pipeline)
 
-        feature_engineering_feature_union = FeatureUnion(feature_union_list, n_jobs=-1)
+        feature_union = FeatureUnion(feature_union_list, n_jobs=-1)
 
-        pipeline_list.append(('feature_engineering_feature_union', feature_engineering_feature_union))
+        pipeline_list.append(('feature_union', feature_union))
 
 
         if perform_feature_selection:
@@ -122,7 +122,7 @@ class Predictor(object):
             gs_params['final_model__perform_grid_search_on_model'] = [True, False]
 
         if self.compute_power >= 3:
-            gs_params['scaler__truncate_large_values'] = [True, False]
+            gs_params['feature_union__main_dv_pipeline__scaler__truncate_large_values'] = [True, False]
 
         if user_defined_model_names:
             model_names = user_defined_model_names
