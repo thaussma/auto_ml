@@ -101,7 +101,7 @@ class FeatureEngineer(BaseEstimator, TransformerMixin):
 
     def transform(self, X, y=None):
 
-        features = self._iterate_X_and_get_date_features(X, remove_date_col=True)
+        features = self._iterate_X_and_get_date_features(X, remove_date_col=False)
 
 
         if self.return_sparse is False:
