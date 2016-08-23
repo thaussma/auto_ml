@@ -46,10 +46,11 @@ class Predictor(object):
             # That attribute name must start with 'subpredictor'
             # The value for that attribute name in column_descriptions should be either 'classifier' or 'regressor'
             elif value[:12] == 'subpredictor':
-                subpredictors[value[12:]] = utils.regressor_or_classifier(value)
+                print(value)
+                self.subpredictors[value[13:]] = utils.regressor_or_classifier(value)
 
 
-
+        print(self)
         self.grid_search_pipelines = []
 
     def _construct_pipeline(self, user_input_func=None, model_name='LogisticRegression', optimize_final_model=False, perform_feature_selection=True, impute_missing_values=True, ml_for_analytics=True, perform_feature_scaling=True):
@@ -58,12 +59,9 @@ class Predictor(object):
 
         maindv_pipeline_list = []
 
-        # TODO: add in FeatureUnion compatibility to FunctionTransformer
         if user_input_func is not None:
             maindv_pipeline_list.append(('user_func', FunctionTransformer(func=user_input_func, pass_y=False, validate=False) ))
 
-        # TODO: add in FeatureUnion coompatibility
-        # These parts will be included no matter what.
         maindv_pipeline_list.append(('basic_transform', utils.BasicDataCleaning(column_descriptions=self.column_descriptions)))
 
         if perform_feature_scaling:
@@ -79,8 +77,17 @@ class Predictor(object):
         # Construct a pipeline tuple from our main_dv_pipeline
         main_dv_pipeline = ('main_dv_pipeline', Pipeline(maindv_pipeline_list))
 
+        # Date Feature Engineering
         if len(self.date_cols) > 0:
             feature_union_list.append(('date_feature_engineering', date_feature_engineering.FeatureEngineer(date_cols=self.date_cols, return_sparse=True)))
+
+        # for subpredictor_name in self.subpredictors:
+        #     feature_union.append((
+        #         'subpredictor_' + subpredictor_name,
+        #         utils.AddSubpredictorPrediction(
+        #             type_of_estimator=self.subpredictors[subpredictor_name],
+        #             col_name=subpredictor_name
+        #     )))
 
         feature_union_list.append(main_dv_pipeline)
 
