@@ -3,11 +3,12 @@ import datetime
 import math
 import numpy as np
 import os
+import pdb
 import random
 
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.cluster import MiniBatchKMeans
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, ExtraTreesRegressor, AdaBoostRegressor
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, ExtraTreesRegressor, AdaBoostRegressor, GradientBoostingRegressor
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.feature_selection import GenericUnivariateSelect, RFECV, SelectFromModel
 from sklearn.grid_search import GridSearchCV, RandomizedSearchCV
@@ -51,24 +52,27 @@ class BasicDataCleaning(BaseEstimator, TransformerMixin):
     def transform(self, X, y=None):
 
         vals_to_del = set([None, float('nan'), float('Inf')])
-        vals_to_float = set([None, 'continuous', 'numerical', 'float', 'int'])
+        cols_to_float = set([None, 'continuous', 'numerical', 'float', 'int'])
+
+        X_clean = []
 
         deleted_values_sample = []
         deleted_info = {}
-        for row in X:
+        for row_idx, row in enumerate(X):
+            clean_row = {}
             for key, val in row.items():
                 col_desc = self.column_descriptions.get(key)
                 if col_desc == 'categorical':
-                    row[key] = str(val)
-                elif col_desc in vals_to_float:
-                    if val in vals_to_del:
-                        # TODO: eventually here we will put in a special value to indicate we should try to impute this value later on in the pipeline
-                        del row[key]
-                    else:
-                        row[key] = float(val)
+                    clean_row[key] = str(val)
+                elif col_desc in cols_to_float:
+                    if val not in vals_to_del:
+                        clean_row[key] = float(val)
+                    # else:
+                    #     # TODO: eventually here we will put in a special value to indicate we should try to impute this value later on in the pipeline
                 elif col_desc == 'date':
+                    pass
                     # We have a separate pipeline handling our date feature engineering. This pipeline feeds directly to the main DictVectorizer, and thus, must not have date values in it.
-                    del row[key]
+                    # del row[key]
                 else:
                     # If we have gotten here, the value is not any that we recognize
                     # This is most likely a typo that the user would want to be informed of, or a case while we're developing on auto_ml itself.
@@ -76,14 +80,15 @@ class BasicDataCleaning(BaseEstimator, TransformerMixin):
                     if len(deleted_values_sample) < 10:
                         deleted_values_sample.append(row[key])
                     deleted_info[key] = col_desc
-                    del row[key]
+
                     # covers cases for dates, target, etc.
+            X_clean.append(clean_row)
         if len(deleted_values_sample) > 0:
             print('We have encountered some values in column_descriptions that are not currently supported. The values stored at these keys have been deleted to allow the rest of the pipeline to run. Here\'s some info about these columns:' )
             print(deleted_info)
             print('And some example values from these columns:')
             print(deleted_values_sample)
-        return X
+        return X_clean
 
 
 
@@ -127,7 +132,8 @@ class FinalModelATC(BaseEstimator, TransformerMixin):
             'XGBRegressor': xgb.XGBRegressor(),
             'ExtraTreesRegressor': ExtraTreesRegressor(n_jobs=-1),
             'AdaBoostRegressor': AdaBoostRegressor(n_estimators=5),
-            'RANSACRegressor': RANSACRegressor()
+            'RANSACRegressor': RANSACRegressor(),
+            'GradientBoostingRegressor': GradientBoostingRegressor(presort=False)
         }
 
 
@@ -292,6 +298,8 @@ class FinalModelATC(BaseEstimator, TransformerMixin):
             raise(e)
 
     def predict(self, X):
+        if self.model_name[:16] == 'GradientBoosting':
+            X = X.todense()
         return self.model.predict(X)
 
 
@@ -410,6 +418,7 @@ class FeatureSelectionTransformer(BaseEstimator, TransformerMixin):
 
 
 def rmse_scoring(estimator, X, y, took_log_of_y=False):
+
     predictions = estimator.predict(X)
     if took_log_of_y:
         for idx, val in enumerate(predictions):
@@ -610,6 +619,7 @@ class AddSubpredictorPrediction(BaseEstimator, TransformerMixin):
             'ExtraTreesRegressor': ExtraTreesRegressor(n_jobs=-1),
             'AdaBoostRegressor': AdaBoostRegressor(n_estimators=5),
             'RANSACRegressor': RANSACRegressor(),
+            'GradientBoostingRegressor': GradientBoostingRegressor(presort=False),
 
             # Clustering
             'MiniBatchKMeans': MiniBatchKMeans()
@@ -637,48 +647,8 @@ class AddSubpredictorPrediction(BaseEstimator, TransformerMixin):
         self.y_train = []
 
 
-    # This is a ton of duplicate code. We can definitely refactor it at some point.
-    def clean_data(self, X):
-        duplicate_X = []
-        vals_to_del = set([None, float('nan'), float('Inf')])
-        deleted_values_sample = []
-        deleted_info = {}
-        for row in X:
-            for key, val in row.items():
-                col_desc = self.column_descriptions.get(key)
-                if col_desc == 'categorical':
-                    row[key] = str(val)
-                elif col_desc in (None, 'continuous', 'numerical', 'float', 'int'):
-                    if val in vals_to_del:
-                        # TODO: eventually here we will put in a special value to indicate we should try to impute this value later on in the pipeline
-                        del row[key]
-                    else:
-                        row[key] = float(val)
-                elif col_desc == 'date':
-                    # We have a separate pipeline handling our date feature engineering. This pipeline feeds directly to the main DictVectorizer, and thus, must not have date values in it.
-                    del row[key]
-                else:
-                    # If we have gotten here, the value is not any that we recognize
-                    # This is most likely a typo that the user would want to be informed of, or a case while we're developing on auto_ml itself.
-                    # Regardless, log it.
-                    if len(deleted_values_sample) < 10:
-                        deleted_values_sample.append(row[key])
-                    deleted_info[key] = col_desc
-                    del row[key]
-                    # covers cases for dates, target, etc.
-                    pass
-        if len(deleted_values_sample) > 0:
-            print('We have encountered some values in column_descriptions that are not currently supported. The values stored at these keys have been deleted to allow the rest of the pipeline to run. Here\'s some info about these columns:' )
-            print(deleted_info)
-            print('And some example values from these columns:')
-            print(deleted_values_sample)
-
-
-
     def fit(self, X, y=None):
-        print('AddSubpredictorPrediction is being fit')
-        # print('X.shape')
-        # print(X.shape)
+
         # Remove these values (they're what we're trying to predict, we will not know them beforehand when we're actually making the predictions).
         vals_to_del = set([None, float('nan'), float('Inf')])
         y_train_dup_direct = []

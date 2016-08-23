@@ -151,6 +151,7 @@ class Predictor(object):
     def _get_estimator_names(self):
         if self.type_of_estimator == 'regressor':
             base_estimators = ['Ridge', 'XGBRegressor']
+            # base_estimators = ['Ridge', 'GradientBoostingRegressor']
             if self.compute_power < 7:
                 return base_estimators
             else:
