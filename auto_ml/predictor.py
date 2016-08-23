@@ -18,15 +18,10 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 class Predictor(object):
 
-
     def __init__(self, type_of_estimator, column_descriptions, verbose=True):
-        if type_of_estimator.lower() in ['regressor','regression', 'regressions', 'regressors', 'number', 'numeric', 'continuous']:
-            self.type_of_estimator = 'regressor'
-        elif type_of_estimator.lower() in ['classifier', 'classification', 'categorizer', 'categorization', 'categories', 'labels', 'labeled', 'label']:
-            self.type_of_estimator = 'classifier'
-        else:
-            print('Invalid value for "type_of_estimator". Please pass in either "regressor" or "classifier". You passed in: ' + type_of_estimator)
-            raise ValueError('Invalid value for "type_of_estimator". Please pass in either "regressor" or "classifier". You passed in: ' + type_of_estimator)
+
+        self.type_of_estimator = utils.regressor_or_classifier(type_of_estimator.lower())
+
         self.column_descriptions = column_descriptions
         self.verbose = verbose
         self.trained_pipeline = None
@@ -34,15 +29,26 @@ class Predictor(object):
         self.date_cols = []
         # Later on, if this is a regression problem, we will probably take the natural log of our y values for training, but we will still want to return the predictions in their normal scale (not the natural log values)
         self.took_log_of_y = False
+        self.subpredictors = {}
 
         # TODO: add in some input validation
         for key, value in column_descriptions.items():
+
+            # Make everything lowercase
             value = value.lower()
             column_descriptions[key] = value
+
             if value == 'output':
                 self.output_column = key
             elif value == 'date':
                 self.date_cols.append(key)
+            # If the user wants us to train subpredictors, they must pass in the y_train values for that subpredictor as attributes on each row.
+            # That attribute name must start with 'subpredictor'
+            # The value for that attribute name in column_descriptions should be either 'classifier' or 'regressor'
+            elif value[:12] == 'subpredictor':
+                subpredictors[value[12:]] = utils.regressor_or_classifier(value)
+
+
 
         self.grid_search_pipelines = []
 
