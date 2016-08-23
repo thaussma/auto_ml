@@ -50,7 +50,8 @@ class BasicDataCleaning(BaseEstimator, TransformerMixin):
     def transform(self, X, y=None):
 
         vals_to_del = set([None, float('nan'), float('Inf')])
-
+        deleted_values_sample = []
+        deleted_info = {}
         for row in X:
             for key, val in row.items():
                 col_desc = self.column_descriptions.get(key)
@@ -66,9 +67,20 @@ class BasicDataCleaning(BaseEstimator, TransformerMixin):
                     # We have a separate pipeline handling our date feature engineering. This pipeline feeds directly to the main DictVectorizer, and thus, must not have date values in it.
                     del row[key]
                 else:
+                    # If we have gotten here, the value is not any that we recognize
+                    # This is most likely a typo that the user would want to be informed of, or a case while we're developing on auto_ml itself.
+                    # Regardless, log it.
+                    if len(deleted_values_sample) < 10:
+                        deleted_values_sample.append(row[key])
+                    deleted_info[key] = col_desc
+                    del row[key]
                     # covers cases for dates, target, etc.
                     pass
-
+        if len(deleted_values_sample) > 0:
+            print('We have encountered some values in column_descriptions that are not currently supported. The values stored at these keys have been deleted to allow the rest of the pipeline to run. Here\'s some info about these columns:' )
+            print(deleted_info)
+            print('And some example values from these columns:')
+            print(deleted_values_sample)
         return X
 
 
@@ -491,7 +503,7 @@ class CustomSparseScaler(BaseEstimator, TransformerMixin):
 
         return X
 
-
+# TODO: refactor to just be clustering
 class AddPredictedFeature(BaseEstimator, TransformerMixin):
 
     def set_model_map(self):
@@ -576,6 +588,70 @@ def regressor_or_classifier(type_of_estimator):
     else:
         print('Invalid value for "type_of_estimator". Please pass in either "regressor" or "classifier". You passed in: ' + type_of_estimator)
         raise ValueError('Invalid value for "type_of_estimator". Please pass in either "regressor" or "classifier". You passed in: ' + type_of_estimator)
+
+
+class AddSubpredictorPrediction(BaseEstimator, TransformerMixin):
+
+    def set_model_map(self):
+        self.model_map = {
+            # Classifiers
+            'LogisticRegression': LogisticRegression(n_jobs=-2),
+            'RandomForestClassifier': RandomForestClassifier(n_jobs=-2),
+            'RidgeClassifier': RidgeClassifier(),
+            'XGBClassifier': xgb.XGBClassifier(),
+
+            # Regressors
+            'LinearRegression': LinearRegression(n_jobs=-2),
+            'RandomForestRegressor': RandomForestRegressor(n_jobs=-2),
+            'Ridge': Ridge(),
+            'XGBRegressor': xgb.XGBRegressor(),
+            'ExtraTreesRegressor': ExtraTreesRegressor(n_jobs=-1),
+            'AdaBoostRegressor': AdaBoostRegressor(n_estimators=5),
+            'RANSACRegressor': RANSACRegressor(),
+
+            # Clustering
+            'MiniBatchKMeans': MiniBatchKMeans(self.n_clusters)
+        }
+
+    def __init__(self, type_of_estimator, col_name, model_name=None):
+        self.type_of_estimator = type_of_estimator
+        self.col_name = col_name
+        self.col_attribute_name = 'subpredictor_' + self.col_name
+        self.set_model_map
+
+        if model_name is not None:
+            self.model_name = model_name
+        elif type_of_estimator == 'regressor':
+            self.model_name = 'LinearRegression'
+        elif type_of_estimator == 'classifier':
+            self.model_name = 'LogisticRegression'
+        self.model = self.model_map[self.model_name]
+
+        # Each row holds the observed value for this subpredictor that we are trying to predict.
+        # Split it out to save as our training y values
+        self.y_train = []
+
+
+    def fit(self, X, y=None):
+        print('AddSubpredictorPrediction is being fit')
+        print('X.shape')
+        print(X.shape)
+        # Remove these values (they're what we're trying to predict, we will not know them beforehand when we're actually making the predictions).
+        for row in X:
+            val = row.pop(self.col_attribute_name, None)
+            self.y_train.append(val)
+
+        self.dv = DictVectorizer(sparse=True, copy=True)
+        X = self.dv.fit_transform(X)
+
+        self.model.fit(X, self.y_train)
+
+
+    def transform(self, X, y=None):
+
+        print('self.predict(X)')
+        print(self.predict(X))
+        return self.predict(X)
 
 
 
