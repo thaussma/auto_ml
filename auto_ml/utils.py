@@ -639,7 +639,7 @@ class AddSubpredictorPrediction(BaseEstimator, TransformerMixin):
         if model_name is not None:
             self.model_name = model_name
         elif type_of_estimator == 'regressor':
-            self.model_name = 'LinearRegression'
+            self.model_name = 'GradientBoostingRegressor'
         elif type_of_estimator == 'classifier':
             self.model_name = 'LogisticRegression'
 
@@ -711,7 +711,12 @@ class AddSubpredictorPrediction(BaseEstimator, TransformerMixin):
 
         clean_X = self._make_clean_X(X, split_y=False)
         clean_X = self.dv.transform(clean_X)
-        predictions = self.model.predict(clean_X)
+
+        if self.model_name == 'GradientBoostingRegressor':
+            denseX = clean_X.todense()
+            predictions = self.model.predict(denseX)
+        else:
+            predictions = self.model.predict(clean_X)
 
         predictions = [[x] for x in predictions]
 
