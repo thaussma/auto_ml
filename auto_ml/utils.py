@@ -23,10 +23,11 @@ import xgboost as xgb
 
 def split_output(X, output_column_name, verbose=False):
     y = []
-    for row in X:
+    for idx, row in enumerate(X):
         y.append(
             row.pop(output_column_name)
         )
+        row['id'] = idx
 
     if verbose:
         print('Just to make sure that your y-values make sense, here are the first 100 sorted values:')
@@ -50,6 +51,9 @@ class BasicDataCleaning(BaseEstimator, TransformerMixin):
 
 
     def transform(self, X, y=None):
+
+        print('X head inside BasicDataCleaning.transform start:')
+        print([row['id'] for row in  X[:3]])
 
         vals_to_del = set([None, float('nan'), float('Inf')])
         cols_to_float = set([None, 'continuous', 'numerical', 'float', 'int'])
@@ -90,6 +94,11 @@ class BasicDataCleaning(BaseEstimator, TransformerMixin):
             print('And some example values from these columns:')
             print(deleted_values_sample)
 
+        print('X head inside BasicDataCleaning.transform end:')
+        print([row['id'] for row in  X_clean[:3]])
+
+        # print('X_clean inside BasicDataCleaning.transform')
+        # print(X_clean[:3])
         return X_clean
 
 
@@ -629,22 +638,24 @@ class AddSubpredictorPrediction(BaseEstimator, TransformerMixin):
             'MiniBatchKMeans': MiniBatchKMeans()
         }
 
-    def __init__(self, type_of_estimator, col_name, column_descriptions=None, model_name=None):
+    def __init__(self, type_of_estimator, subpredictor_name, column_descriptions=None, model_name=None, X_test=None):
         self.type_of_estimator = type_of_estimator
-        self.col_name = col_name
-        self.y_train_attribute_name = 'subpredictor_' + self.col_name
+        self.subpredictor_name = subpredictor_name
+        self.y_train_attribute_name = 'subpredictor_' + self.subpredictor_name
         self.set_model_map
         self.column_descriptions = column_descriptions
+        if X_test is not None:
+            self.y_test = [row[self.y_train_attribute_name] for row in X_test if row[self.y_train_attribute_name] is not None]
+            self.X_test = [row for row in X_test if row[self.y_train_attribute_name] is not None]
 
         if model_name is not None:
             self.model_name = model_name
         elif type_of_estimator == 'regressor':
-            self.model_name = 'GradientBoostingRegressor'
+            self.model_name = 'RandomForestRegressor'
         elif type_of_estimator == 'classifier':
             self.model_name = 'LogisticRegression'
 
         self.set_model_map()
-        self.model = self.model_map[self.model_name]
 
         # Each row holds the observed value for this subpredictor that we are trying to predict.
         # Split it out to save as our training y values
@@ -696,6 +707,7 @@ class AddSubpredictorPrediction(BaseEstimator, TransformerMixin):
 
 
     def fit(self, X, y=None):
+        self.model = self.model_map[self.model_name]
 
         clean_X = self._make_clean_X(X, split_y=True)
 
@@ -704,21 +716,44 @@ class AddSubpredictorPrediction(BaseEstimator, TransformerMixin):
         clean_X = self.dv.fit_transform(clean_X)
 
         self.model.fit(X=clean_X, y=self.y_train)
+        print(self.subpredictor_name)
+        print('model score on the data we trained it on:')
+
+        if self.model_name[:16] == 'GradientBoosting' and scipy.sparse.issparse(clean_X):
+            clean_X = clean_X.todense()
+
+        print(self.model.score(clean_X, self.y_train))
+
+        # if self.X_test is not None:
+        #     print('RMSE of this model on our X_test dataset:')
+        #     X_test_predictions = self.transform(self.X_test)
+        #     print(mean_squared_error(self.y_test, X_test_predictions)**0.5)
+        # TODO: print analytics for this subpredictor
+        # print(rmse_scoring(self.model, clean_X, y_train))
 
         return self
 
     def transform(self, X, y=None):
 
+        print('X head inside AddSubpredictorPrediction.transform start:')
+        print([row['id'] for row in  X[:3]])
+
         clean_X = self._make_clean_X(X, split_y=False)
         clean_X = self.dv.transform(clean_X)
 
-        if self.model_name == 'GradientBoostingRegressor':
+        if self.model_name[:16] == 'GradientBoosting' and scipy.sparse.issparse(clean_X):
             denseX = clean_X.todense()
             predictions = self.model.predict(denseX)
         else:
             predictions = self.model.predict(clean_X)
 
         predictions = [[x] for x in predictions]
+        # print(predictions[:5])
+
+        # predictions = [[1] for x in predictions]
+
+        print('X head inside AddSubpredictorPrediction.transform end:')
+        print([row for row in  clean_X.todense()[:3]])
 
         return predictions
 

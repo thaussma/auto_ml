@@ -88,13 +88,14 @@ class Predictor(object):
                 'subpredictor_' + subpredictor_name,
                 utils.AddSubpredictorPrediction(
                     type_of_estimator=self.subpredictors[subpredictor_name],
-                    col_name=subpredictor_name,
-                    column_descriptions=self.column_descriptions
+                    subpredictor_name=subpredictor_name,
+                    column_descriptions=self.column_descriptions,
+                    X_test=self.X_test
             )))
 
         feature_union_list.append(main_dv_pipeline)
 
-        feature_union = FeatureUnion(feature_union_list, n_jobs=1)
+        feature_union = FeatureUnion(feature_union_list, n_jobs=-1)
 
         pipeline_list.append(('feature_union', feature_union))
 
@@ -298,7 +299,7 @@ class Predictor(object):
                 cv=2,
                 param_grid=self.grid_search_params,
                 # Train across all cores.
-                n_jobs=-1,
+                n_jobs=1,
                 # Be verbose (lots of printing).
                 verbose=grid_search_verbose,
                 # Print warnings when we fail to fit a given combination of parameters, but do not raise an error.

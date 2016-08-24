@@ -13,26 +13,25 @@ class FeatureEngineer(BaseEstimator, TransformerMixin):
 
 
     def fit(self, X, y=None):
+        print('len X inside Date Feature Engineering .fit')
+        print(len(X))
 
         # if we're returning sparse data, we will need to fit a DictVectorizer
 
         if self.return_sparse:
-            predicted_vals = self._iterate_X_and_get_date_features(X, remove_date_col=False)
+            predicted_vals = self._iterate_X_and_get_date_features(X)
             self.dv = DictVectorizer(sparse=True)
             self.dv.fit(predicted_vals)
 
         return self
 
-    def _iterate_X_and_get_date_features(self, X, remove_date_col):
+    def _iterate_X_and_get_date_features(self, X):
         list_of_feature_dicts = []
 
         for idx, x_row in enumerate(X):
 
             for date_col in self.date_cols:
-                if remove_date_col:
-                    date_val = x_row.pop(date_col, False)
-                else:
-                    date_val = x_row.get(date_col, False)
+                date_val = x_row.get(date_col, False)
 
                 # make sure this property exists for this x_row
                 if date_val:
@@ -101,7 +100,7 @@ class FeatureEngineer(BaseEstimator, TransformerMixin):
 
     def transform(self, X, y=None):
 
-        features = self._iterate_X_and_get_date_features(X, remove_date_col=False)
+        features = self._iterate_X_and_get_date_features(X)
 
         if self.return_sparse is False:
             return features
