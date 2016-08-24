@@ -106,11 +106,6 @@ class Predictor(object):
         if self.add_cluster_prediction or self.compute_power >=7:
             pipeline_list.append(('add_cluster_prediction', utils.AddPredictedFeature(model_name='MiniBatchKMeans', type_of_estimator=self.type_of_estimator, include_original_X=True)))
 
-        # if self.subpredictors_to_train is not None:
-        #     pipeline_list.append(('subpredictor_feature_union', ))
-        #     for subpredictor_name, subpredictor_y_vals in self.subpredictors_to_train.iteritems():
-
-
         pipeline_list.append(('final_model', utils.FinalModelATC(model_name=model_name, perform_grid_search_on_model=optimize_final_model, type_of_estimator=self.type_of_estimator, ml_for_analytics=ml_for_analytics)))
 
         constructed_pipeline = Pipeline(pipeline_list)

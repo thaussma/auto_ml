@@ -53,6 +53,7 @@ class BasicDataCleaning(BaseEstimator, TransformerMixin):
 
         vals_to_del = set([None, float('nan'), float('Inf')])
         cols_to_float = set([None, 'continuous', 'numerical', 'float', 'int'])
+        cols_to_ignore = set(['date', 'regressor', 'classifier'])
 
         X_clean = []
 
@@ -69,7 +70,7 @@ class BasicDataCleaning(BaseEstimator, TransformerMixin):
                         clean_row[key] = float(val)
                     # else:
                     #     # TODO: eventually here we will put in a special value to indicate we should try to impute this value later on in the pipeline
-                elif col_desc == 'date':
+                elif col_desc in  cols_to_ignore:
                     pass
                     # We have a separate pipeline handling our date feature engineering. This pipeline feeds directly to the main DictVectorizer, and thus, must not have date values in it.
                     # del row[key]
@@ -88,6 +89,7 @@ class BasicDataCleaning(BaseEstimator, TransformerMixin):
             print(deleted_info)
             print('And some example values from these columns:')
             print(deleted_values_sample)
+
         return X_clean
 
 
@@ -414,6 +416,8 @@ class FeatureSelectionTransformer(BaseEstimator, TransformerMixin):
         if self.selector == 'KeepAll':
             return X
         else:
+            predictions = self.selector.transform(X)
+
             return self.selector.transform(X)
 
 
@@ -510,7 +514,7 @@ class CustomSparseScaler(BaseEstimator, TransformerMixin):
                             scaled_value = 0
                         elif scaled_value > 1:
                             scaled_value = 1
-                    row[k] =scaled_value
+                    row[k] = scaled_value
 
         return X
 
@@ -628,7 +632,7 @@ class AddSubpredictorPrediction(BaseEstimator, TransformerMixin):
     def __init__(self, type_of_estimator, col_name, column_descriptions=None, model_name=None):
         self.type_of_estimator = type_of_estimator
         self.col_name = col_name
-        self.col_attribute_name = 'subpredictor_' + self.col_name
+        self.y_train_attribute_name = 'subpredictor_' + self.col_name
         self.set_model_map
         self.column_descriptions = column_descriptions
 
@@ -647,64 +651,71 @@ class AddSubpredictorPrediction(BaseEstimator, TransformerMixin):
         self.y_train = []
 
 
-    def fit(self, X, y=None):
-
+    def _make_clean_X(self, X, split_y=False):
         # Remove these values (they're what we're trying to predict, we will not know them beforehand when we're actually making the predictions).
         vals_to_del = set([None, float('nan'), float('Inf')])
-        y_train_dup_direct = []
+        row_indices_to_ignore = []
 
-        for row in X:
-            val = row.pop(self.col_attribute_name, None)
-            self.y_train.append(val)
-            y_train_dup_direct.append(val)
+        clean_X = []
 
-            for key, val in row.items():
-                col_desc = self.column_descriptions.get(key)
-                if col_desc == 'categorical':
-                    row[key] = str(val)
-                elif col_desc in (None, 'continuous', 'numerical', 'float', 'int'):
-                    if val in vals_to_del:
-                        # TODO: eventually here we will put in a special value to indicate we should try to impute this value later on in the pipeline
-                        del row[key]
-                    else:
-                        row[key] = float(val)
-                elif col_desc == 'date':
-                    # We have a separate pipeline handling our date feature engineering. This pipeline feeds directly to the main DictVectorizer, and thus, must not have date values in it.
-                    del row[key]
+        for row_idx, row in enumerate(X):
+
+            clean_row = {}
+            keep_row = True
+
+            if split_y:
+                # This is a piece of mutation we are ok doing. Otherwise we will be feeding in actual observed values for sub-pieces of the prediction we want to make.
+                y_train_val = row.get(self.y_train_attribute_name, None)
+
+                # If this row is missing the value for the subpredictor, that's ok for the final overall training, but not ok for training this subpredictor. So we'll just ignore it while training this subpredictor.
+                if y_train_val in vals_to_del:
+                    keep_row = False
                 else:
-                    del row[key]
-                    # covers cases for dates, target, etc.
-                    pass
+                    self.y_train.append(y_train_val)
 
+            if keep_row:
+                for key, val in row.items():
+                    col_desc = self.column_descriptions.get(key)
+                    if col_desc == 'categorical':
+                        clean_row[key] = str(val)
+                    elif col_desc in (None, 'continuous', 'numerical', 'float', 'int'):
+                        if val not in vals_to_del:
+                            clean_row[key] = float(val)
+                    elif col_desc == 'date':
+                        # We have a separate pipeline handling our date feature engineering. This pipeline feeds directly to the main DictVectorizer, and thus, must not have date values in it.
+                        # del row[key]
+                        pass
+                    else:
+                        # del row[key]
+                        # covers cases for dates, target, etc.
+                        pass
+                # Note that we are only appending this row if the y value has already passed
+                clean_X.append(clean_row)
+        return clean_X
+
+
+
+    def fit(self, X, y=None):
+
+        clean_X = self._make_clean_X(X, split_y=True)
 
         self.dv = DictVectorizer(sparse=True)
 
-        print('\n\nafter taking out the vals we want')
-        # print(X[:5])
-        # bdc = BasicDataCleaning(column_descriptions=self.column_descriptions)
-        # X = bdc.transform(X)
-        print('\n\nafter BDC')
-        # print(X[:5])
+        clean_X = self.dv.fit_transform(clean_X)
 
-        X = self.dv.fit_transform(X)
-        print('\n\nafter dv.fit_transform')
-        # print(X[:5])
-        print('self.y_train[:5]')
-        print(self.y_train[:5])
-        # print()
-        # TODO(PRESTON): This is where the issue is!
-        # *************************************************************************************
-        # When we pass in values to fit, the y values passed in are all nan
-        y_train_dup_direct = [float(val) for val in y_train_dup_direct]
-        self.model.fit(X=X, y=y_train_dup_direct)
-        print('WE MADE IT PAST self.model.fit()')
-        print('**********************************************************')
+        self.model.fit(X=clean_X, y=self.y_train)
+
+        return self
 
     def transform(self, X, y=None):
-        X = self.dv.transform(X)
-        print('self.model.predict(X)')
-        print(self.model.predict(X))
-        return self.model.predict(X)
+
+        clean_X = self._make_clean_X(X, split_y=False)
+        clean_X = self.dv.transform(clean_X)
+        predictions = self.model.predict(clean_X)
+
+        predictions = [[x] for x in predictions]
+
+        return predictions
 
 
 

@@ -103,7 +103,6 @@ class FeatureEngineer(BaseEstimator, TransformerMixin):
 
         features = self._iterate_X_and_get_date_features(X, remove_date_col=False)
 
-
         if self.return_sparse is False:
             return features
         else:
