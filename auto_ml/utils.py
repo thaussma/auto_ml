@@ -13,6 +13,7 @@ from sklearn.grid_search import GridSearchCV, RandomizedSearchCV
 from sklearn.linear_model import RandomizedLasso, RandomizedLogisticRegression, RANSACRegressor,                 LinearRegression, Ridge, Lasso, ElasticNet, LassoLars, OrthogonalMatchingPursuit, BayesianRidge, ARDRegression, SGDRegressor, PassiveAggressiveRegressor, LogisticRegression, RidgeClassifier, SGDClassifier, Perceptron, PassiveAggressiveClassifier
 from sklearn.metrics import mean_squared_error, make_scorer, brier_score_loss
 from sklearn.preprocessing import LabelBinarizer, OneHotEncoder
+import tensorflow.contrib.learn.python.learn as tflearn
 
 import scipy
 
@@ -288,6 +289,7 @@ def get_model_from_name(model_name):
     from sklearn.ensemble import GradientBoostingClassifier, GradientBoostingRegressor
     model_map = {
         # Classifiers
+        'DeepLearningClassifier': tflearn.DNNClassifier(hidden_units=[300, 300, 300]),
         'LogisticRegression': LogisticRegression(n_jobs=-2),
         'RandomForestClassifier': RandomForestClassifier(n_jobs=-2),
         'RidgeClassifier': RidgeClassifier(),
@@ -299,6 +301,7 @@ def get_model_from_name(model_name):
         'PassiveAggressiveClassifier': PassiveAggressiveClassifier(),
 
         # Regressors
+        'DeepLearningRegressor': tflearn.DNNRegressor(hidden_units=[300, 300, 300]),
         'LinearRegression': LinearRegression(n_jobs=-2),
         'RandomForestRegressor': RandomForestRegressor(n_jobs=-2),
         'Ridge': Ridge(),
@@ -384,7 +387,10 @@ class FinalModelATC(BaseEstimator, TransformerMixin):
 
         self.model = get_model_from_name(self.model_name)
 
-        self.model.fit(X_fit, y)
+        if self.model_name[:12] == 'DeepLearning':
+            self.model.fit(X_fit.todense(), y, steps=100)
+        else:
+            self.model.fit(X_fit, y)
 
         return self
 
@@ -436,7 +442,7 @@ class FinalModelATC(BaseEstimator, TransformerMixin):
             # Trying to force XGBoost to play nice with sparse matrices
             X_predict = scipy.sparse.hstack((X, ones))
 
-        elif self.model_name[:16] == 'GradientBoosting' and scipy.sparse.issparse(X):
+        elif (self.model_name[:16] == 'GradientBoosting' or self.model_name[:12] == 'DeepLearning') and scipy.sparse.issparse(X):
             X_predict = X.todense()
 
         else:
