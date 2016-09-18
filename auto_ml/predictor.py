@@ -244,10 +244,10 @@ class Predictor(object):
         sub_column_descriptions, sub_type_of_estimator = self._make_sub_column_descriptions(self.column_descriptions, sub_name)
         if sub_model_names is None and sub_type_of_estimator == 'classifier':
             # sub_model_names = ['XGBClassifier']
-            sub_model_names = ['GradientBoostingClassifier']
+            sub_model_names = ['DeepLearningClassifier']
         elif sub_model_names is None and sub_type_of_estimator == 'regressor':
             # sub_model_names = ['XGBRegressor']
-            sub_model_names = ['GradientBoostingRegressor']
+            sub_model_names = ['DeepLearningRegressor']
 
         ml_predictor = Predictor(type_of_estimator=sub_type_of_estimator, column_descriptions=sub_column_descriptions)
         # TODO: grab proper y_test values for this particular subpredictor
@@ -380,23 +380,23 @@ class Predictor(object):
 
         self.perform_grid_search_by_model_names(estimator_names, scoring, X, y)
 
-        # Once we have trained all the pipelines, select the best one based on it's performance on (top priority first):
-        # 1. Holdout data
-        # 2. CV data
+        # # Once we have trained all the pipelines, select the best one based on it's performance on (top priority first):
+        # # 1. Holdout data
+        # # 2. CV data
 
-        # First, sort all of the tuples that hold our scores in their first position(s), and our actual trained pipeline in their final position
-        # Since a more positive score is better, we want to make sure that the first item in our sorted list is the highest score, thus, reverse=True
-        sorted_gs_pipeline_results = sorted(self.grid_search_pipelines, key=lambda x: x[0], reverse=True)
+        # # First, sort all of the tuples that hold our scores in their first position(s), and our actual trained pipeline in their final position
+        # # Since a more positive score is better, we want to make sure that the first item in our sorted list is the highest score, thus, reverse=True
+        # sorted_gs_pipeline_results = sorted(self.grid_search_pipelines, key=lambda x: x[0], reverse=True)
 
-        # Next, grab the thing at position 0 in our sorted list, which is itself a list of the scores(s), and the pipeline itself
-        best_result_list = sorted_gs_pipeline_results[0]
-        # Our best grid search result is the thing at the end of that list.
-        best_trained_gs = best_result_list[-1]
-        # And the pipeline is the best estimator within that grid search object.
-        self.trained_pipeline = best_trained_gs.best_estimator_
+        # # Next, grab the thing at position 0 in our sorted list, which is itself a list of the scores(s), and the pipeline itself
+        # best_result_list = sorted_gs_pipeline_results[0]
+        # # Our best grid search result is the thing at the end of that list.
+        # best_trained_gs = best_result_list[-1]
+        # # And the pipeline is the best estimator within that grid search object.
+        # self.trained_pipeline = best_trained_gs.best_estimator_
 
-        del self.X_test
-        del self.grid_search_pipelines
+        # del self.X_test
+        # del self.grid_search_pipelines
 
 
     def perform_grid_search_by_model_names(self, estimator_names, scoring, X, y):
@@ -418,55 +418,57 @@ class Predictor(object):
             else:
                 grid_search_verbose = 0
 
-            gs = GridSearchCV(
-                # Fit on the pipeline.
-                ppl,
-                cv=2,
-                param_grid=self.grid_search_params,
-                # Train across all cores.
-                n_jobs=-1,
-                # Be verbose (lots of printing).
-                verbose=grid_search_verbose,
-                # Print warnings when we fail to fit a given combination of parameters, but do not raise an error.
-                # Set the score on this partition to some very negative number, so that we do not choose this estimator.
-                error_score=-1000000000,
-                # TODO(PRESTON): change scoring to be RMSE by default
-                scoring=scoring
-                # ,pre_dispatch='1*n_jobs'
-            )
+            ppl.fit(X, y)
+            self.trained_pipeline = ppl
+            # gs = GridSearchCV(
+            #     # Fit on the pipeline.
+            #     ppl,
+            #     cv=2,
+            #     param_grid=self.grid_search_params,
+            #     # Train across all cores.
+            #     n_jobs=-1,
+            #     # Be verbose (lots of printing).
+            #     verbose=grid_search_verbose,
+            #     # Print warnings when we fail to fit a given combination of parameters, but do not raise an error.
+            #     # Set the score on this partition to some very negative number, so that we do not choose this estimator.
+            #     error_score=-1000000000,
+            #     # TODO(PRESTON): change scoring to be RMSE by default
+            #     scoring=scoring
+            #     # ,pre_dispatch='1*n_jobs'
+            # )
 
-            if self.verbose:
-                print('\n\n********************************************************************************************')
-                print('About to fit the GridSearchCV on the pipeline for the model ' + model_name + ' to predict ' + self.output_column)
+            # if self.verbose:
+            #     print('\n\n********************************************************************************************')
+            #     print('About to fit the GridSearchCV on the pipeline for the model ' + model_name + ' to predict ' + self.output_column)
 
-            gs.fit(X, y)
-            self.trained_pipeline = gs.best_estimator_
+            # gs.fit(X, y)
+            # self.trained_pipeline = gs.best_estimator_
 
-            if self.ml_for_analytics and model_name in ('LogisticRegression', 'RidgeClassifier', 'LinearRegression', 'Ridge'):
-                self._print_ml_analytics_results_regression()
-            elif self.ml_for_analytics and model_name in ['RandomForestClassifier', 'RandomForestRegressor', 'XGBClassifier', 'XGBRegressor']:
-                self._print_ml_analytics_results_random_forest()
+            # if self.ml_for_analytics and model_name in ('LogisticRegression', 'RidgeClassifier', 'LinearRegression', 'Ridge'):
+            #     self._print_ml_analytics_results_regression()
+            # elif self.ml_for_analytics and model_name in ['RandomForestClassifier', 'RandomForestRegressor', 'XGBClassifier', 'XGBRegressor']:
+            #     self._print_ml_analytics_results_random_forest()
 
-            # write the results for each param combo to file for user analytics.
-            if self.write_gs_param_results_to_file:
-                utils.write_gs_param_results_to_file(gs, self.gs_param_file_name)
+            # # write the results for each param combo to file for user analytics.
+            # if self.write_gs_param_results_to_file:
+            #     utils.write_gs_param_results_to_file(gs, self.gs_param_file_name)
 
-            # We will save the info for this pipeline grid search, along with it's scores on the CV data, and the holdout data
-            pipeline_results = []
+            # # We will save the info for this pipeline grid search, along with it's scores on the CV data, and the holdout data
+            # pipeline_results = []
 
-            if self.X_test and self.y_test:
-                print('The results from the X_test and y_test data passed into ml_for_analytics (which were not used for training- true holdout data) are:')
-                holdout_data_score = self.score(self.X_test, self.y_test)
-                print(holdout_data_score)
+            # if self.X_test and self.y_test:
+            #     print('The results from the X_test and y_test data passed into ml_for_analytics (which were not used for training- true holdout data) are:')
+            #     holdout_data_score = self.score(self.X_test, self.y_test)
+            #     print(holdout_data_score)
 
-                pipeline_results.append(holdout_data_score)
+            #     pipeline_results.append(holdout_data_score)
 
-            if self.print_training_summary_to_viewer:
-                self.print_training_summary(gs)
+            # if self.print_training_summary_to_viewer:
+            #     self.print_training_summary(gs)
 
-            pipeline_results.append(gs.best_score_)
-            pipeline_results.append(gs)
-            self.grid_search_pipelines.append(pipeline_results)
+            # pipeline_results.append(gs.best_score_)
+            # pipeline_results.append(gs)
+            # self.grid_search_pipelines.append(pipeline_results)
 
 
     def _get_xgb_feat_importances(self, clf):
