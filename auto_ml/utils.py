@@ -94,14 +94,14 @@ def get_search_params(model_name):
         },
         'GradientBoostingRegressor': {
             # Add in max_delta_step if classes are extremely imbalanced
-            'max_depth': [1, 2, 3, 5],
-            'max_features': ['sqrt', 'log2', None],
+            'max_depth': [4, 5, 6, 7],
+            # 'max_features': ['sqrt', 'log2', None],
             # 'loss': ['ls', 'lad', 'huber', 'quantile']
             # 'booster': ['gbtree', 'gblinear', 'dart'],
             # 'loss': ['ls', 'lad', 'huber'],
-            'loss': ['ls', 'huber'],
+            # 'loss': ['ls', 'huber'],
             # 'learning_rate': [0.01, 0.1, 0.25, 0.4, 0.7],
-            'subsample': [0.5, 0.8, 1.0]
+            # 'subsample': [0.5, 0.8, 1.0]
         },
         'GradientBoostingClassifier': {
             'loss': ['deviance', 'exponential'],
@@ -365,10 +365,10 @@ def add_date_features_df(df, date_col):
 def make_deep_learning_model(num_cols=250, optimizer='adam', dropout_rate=0.2, weight_constraint=0, shape='standard'):
     model = Sequential()
     # Add a dense hidden layer, with num_nodes = num_cols, and telling it that the incoming input dimensions also = num_cols
-    model.add(Dense(num_cols, input_dim=num_cols, activation='relu', init='normal', W_constraint=maxnorm(weight_constraint)))
+    model.add(Dense(num_cols, input_dim=num_cols, activation='relu', init='normal'))
     model.add(Dropout(dropout_rate))
-    model.add(Dense(num_cols, activation='relu', init='normal', W_constraint=maxnorm(weight_constraint)))
-    model.add(Dense(num_cols, activation='relu', init='normal', W_constraint=maxnorm(weight_constraint)))
+    model.add(Dense(num_cols, activation='relu', init='normal'))
+    # model.add(Dense(num_cols, activation='relu', init='normal', W_constraint=maxnorm(weight_constraint)))
     # For regressors, we want an output layer with a single node
     # For classifiers, we'll want to add in some other processing here (like a softmax activation function)
     model.add(Dense(1, init='normal'))
@@ -402,7 +402,7 @@ def get_model_from_name(model_name):
         'ExtraTreesRegressor': ExtraTreesRegressor(n_jobs=-1),
         'AdaBoostRegressor': AdaBoostRegressor(n_estimators=5),
         'RANSACRegressor': RANSACRegressor(),
-        'GradientBoostingRegressor': GradientBoostingRegressor(presort=False),
+        'GradientBoostingRegressor': GradientBoostingRegressor(presort=False, max_depth=5, loss='huber', max_features=None),
 
         'Lasso': Lasso(),
         'ElasticNet': ElasticNet(),
@@ -927,18 +927,24 @@ class AddSubpredictorPredictions(BaseEstimator, TransformerMixin):
             avg_predictions = []
             std_of_predictions = []
 
-            # get the median, avg, and standard deviation from our weak estimators
-            for row_idx, row_val in enumerate(weak_estimator_predictions[0]):
-                all_weak_predictions_for_row = []
-                for col_idx, col in enumerate(weak_estimator_predictions):
-                    all_weak_predictions_for_row.append(col[row_idx])
-                median_predictions.append(np.median(all_weak_predictions_for_row))
-                avg_predictions.append(np.average(all_weak_predictions_for_row))
-                std_of_predictions.append(np.std(all_weak_predictions_for_row))
+            try:
+                weak_estimator_predictions
+                # get the median, avg, and standard deviation from our weak estimators
+                for row_idx, row_val in enumerate(weak_estimator_predictions[0]):
+                    all_weak_predictions_for_row = []
+                    for col_idx, col in enumerate(weak_estimator_predictions):
+                        all_weak_predictions_for_row.append(col[row_idx])
+                    median_predictions.append(np.median(all_weak_predictions_for_row))
+                    avg_predictions.append(np.average(all_weak_predictions_for_row))
+                    std_of_predictions.append(np.std(all_weak_predictions_for_row))
 
-            X['weak_estimators_median_sub_prediction'] = median_predictions
-            X['weak_estimators_avg_sub_prediction'] = avg_predictions
-            X['weak_estimators_std_of_sub_predictions'] = std_of_predictions
+                X['weak_estimators_median_sub_prediction'] = median_predictions
+                X['weak_estimators_avg_sub_prediction'] = avg_predictions
+                X['weak_estimators_std_of_sub_predictions'] = std_of_predictions
+            except NameError:
+                pass
+
+            return X
 
         else:
             # TODO: Might need to refactor this to take into account that we're using DataFrames now, not a list of lists, where each sublist is a column of predictions

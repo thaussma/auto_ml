@@ -502,7 +502,24 @@ class Predictor(object):
             # However, this means we'll have to train our subpredictors on a different dataset than we train our larger ensemble predictor on.
             # X_ensemble is the X data we'll be using to train our ensemble (the bulk of our data), and y_ensemble is, of course, the relevant y data for training our ensemble.
             # X_subpredictors is the smaller subset of data we'll be using to train our subpredictors on. y_subpredictors doesn't make any sense- it's the y values for our ensemble, but split to mirror the data we're using to train our subpredictors. Thus, we'll ignore it.
-            self.X_ensemble, self.X_subpredictors, self.y_ensemble, self.y_subpredictors = train_test_split(X_df, y, test_size=0.33)
+            subpredictor_mask = X_df.created_at_in_local_time < datetime.date(2016, 9, 1)
+            self.X_subpredictors = []
+            self.y_subpredictors = []
+            self.X_ensemble = []
+            self.y_ensemble = []
+            for idx, item in enumerate(subpredictor_mask):
+                if item == True:
+                    # self.X_subpredictors.append(X_df.iloc[[idx]])
+                    self.y_subpredictors.append(y[idx])
+                else:
+                    # self.X_ensemble.append(X_df.iloc[[idx]])
+                    self.y_ensemble.append(y[idx])
+
+            self.X_subpredictors = X_df[subpredictor_mask]
+            # self.y_subpredictors = y[subpredictor_indices]
+            self.X_ensemble = X_df[~subpredictor_mask]
+            # self.y_ensemble = y[ensemble_indices]
+            # self.X_ensemble, self.X_subpredictors, self.y_ensemble, self.y_subpredictors = train_test_split(X_df, y, test_size=0.33)
             X_df = self.X_ensemble
             y = self.y_ensemble
 
