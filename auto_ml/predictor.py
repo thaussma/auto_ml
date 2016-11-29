@@ -18,6 +18,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 pd.options.mode.chained_assignment = None  # default='warn'
 
 # from sklearn.model_selection import
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.model_selection import GridSearchCV, train_test_split
@@ -750,14 +751,31 @@ class Predictor(object):
             print(self.name)
         print('predicting ' + self.output_column)
 
+        # If we're using a CalibratedClassifierCV as our final model, it will have (3) trained models saved
+        # Just grab the first of these as likely being representative of the others as well
+        model = self.trained_pipeline.named_steps['final_model'].model
+        if isinstance(model, CalibratedClassifierCV):
+            print(model.calibrated_classifiers_)
+            model = model.calibrated_classifiers_[0].base_estimator
+            # print(model)
+            # # print(model['base_estimator'])
+            # print(model.base_estimator)
+            # for k, v in enumerate(model):
+            #     print(k)
+            #     print(v)
+            # print(model.get_params())
+
         # XGB's Classifier has a proper .feature_importances_ property, while the XGBRegressor does not.
         if self.trained_pipeline.named_steps['final_model'].model_name in ['XGBRegressor', 'XGBClassifier']:
-            self._get_xgb_feat_importances(self.trained_pipeline.named_steps['final_model'].model)
+            self._get_xgb_feat_importances(model)
+
+            # self._get_xgb_feat_importances(self.trained_pipeline.named_steps['final_model'].model)
 
         else:
             trained_feature_names = self._get_trained_feature_names()
 
-            trained_feature_importances = self.trained_pipeline.named_steps['final_model'].model.feature_importances_
+            trained_feature_importances = model.feature_importances_
+            # trained_feature_importances = self.trained_pipeline.named_steps['final_model'].model.feature_importances_
 
             feature_infos = zip(trained_feature_names, trained_feature_importances)
 
@@ -781,10 +799,19 @@ class Predictor(object):
 
         trained_feature_names = self._get_trained_feature_names()
 
+        # If we're using a CalibratedClassifierCV as our final model, it will have (3) trained models saved
+        # Just grab the first of these as likely being representative of the others as well
+        model = self.trained_pipeline.named_steps['final_model'].model
+        if isinstance(model, CalibratedClassifierCV):
+            model = model.calibrated_classifiers_[0]
+
+
         if self.type_of_estimator == 'classifier':
-            trained_coefficients = self.trained_pipeline.named_steps['final_model'].model.coef_[0]
+            trained_coefficients = model.coef_[0]
+            # trained_coefficients = self.trained_pipeline.named_steps['final_model'].model.coef_[0]
         else:
-            trained_coefficients = self.trained_pipeline.named_steps['final_model'].model.coef_
+            trained_coefficients = model.coef_
+            # trained_coefficients = self.trained_pipeline.named_steps['final_model'].model.coef_
 
         # feature_ranges = self.trained_pipeline.named_steps['final_model'].feature_ranges
 

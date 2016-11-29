@@ -1,5 +1,6 @@
 import scipy
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.calibration import CalibratedClassifierCV
 try:
     from auto_ml.utils_scoring import brier_score_loss_wrapper, rmse_scoring
 except ImportError:
@@ -20,7 +21,7 @@ class FinalModelATC(BaseEstimator, TransformerMixin):
 
     def __init__(self, model, model_name, ml_for_analytics=False, type_of_estimator='classifier', output_column=None, name=None):
 
-        self.model = model
+        self.raw_model = model
         self.model_name = model_name
         self.ml_for_analytics = ml_for_analytics
         self.type_of_estimator = type_of_estimator
@@ -29,11 +30,16 @@ class FinalModelATC(BaseEstimator, TransformerMixin):
 
         if self.type_of_estimator == 'classifier':
             self._scorer = brier_score_loss_wrapper
+            self.model = CalibratedClassifierCV(base_estimator=model, method='isotonic')
         else:
             self._scorer = rmse_scoring
+            self.model = self.raw_model
 
 
     def fit(self, X, y):
+
+        if X.shape[0] < 3000 and self.type_of_estimator == 'classifier':
+            self.model = CalibratedClassifierCV(base_estimator=self.raw_model, method='sigmoid')
 
         if self.model_name[:3] == 'XGB' and scipy.sparse.issparse(X):
             ones = [[1] for x in range(X.shape[0])]
